@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime
 from typing import (
     AsyncIterable,
@@ -18,11 +20,13 @@ class Pagination(Sized, AsyncIterable[T], Protocol):
     def __getitem__(self, key: int | str) -> Awaitable[T]: ...
 
     @overload
-    def __getitem__(self, key: slice[int | None, int, None]) -> Awaitable[list[T]]: ...
+    def __getitem__(
+        self, key: slice[int | None, int | None, None]
+    ) -> Awaitable[list[T]]: ...
 
     def __getitem__(
         self,
-        key: int | str | slice[int | None, int, None],
+        key: int | str | slice[int | None, int | None, None],
     ) -> Awaitable[T | list[T]]: ...
 
 
@@ -37,7 +41,7 @@ class User(Protocol):
     def name(self) -> str | None: ...
 
     @property
-    def repos(self) -> Pagination["Repo"]: ...
+    def repos(self) -> Pagination[Repo]: ...
 
 
 class File(Protocol):
@@ -70,6 +74,11 @@ class Commit(Protocol):
     def author_date(self) -> datetime: ...
 
 
+class Tag(Protocol):
+    @property
+    def name(self) -> str: ...
+
+
 class Repo(Protocol):
     @property
     def owner(self) -> User: ...
@@ -91,6 +100,12 @@ class Repo(Protocol):
 
     @property
     def commits(self) -> Pagination[Commit]: ...
+
+    @property
+    def tags(self) -> Pagination[Tag]: ...
+
+    @property
+    def stars(self) -> int: ...
 
 
 class Hub(Protocol):

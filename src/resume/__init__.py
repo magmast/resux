@@ -83,17 +83,19 @@ async def summarize(
         if not await conflict_strategy.can_write(workspace, repo.full_name):
             return
 
-        async with asyncio.TaskGroup() as tg:
-            summary_task = tg.create_task(ai.summarize_project(repo))
-            last_major_activity_task = tg.create_task(ai.find_last_major_activity(repo))
-        summary = await summary_task
-        last_major_activity = await last_major_activity_task
+        summary, last_major_activity, tags = await asyncio.gather(
+            ai.summarize_project(repo),
+            ai.find_last_major_activity(repo),
+            repo.tags[:],
+        )
+
         await workspace.projects.set(
             Project(
                 id=repo.full_name,
                 summary=summary,
-                tags=await ai.generate_tags(summary),
+                tags=await ai.generate_tags(tags, summary),
                 last_major_activity=last_major_activity.date,
+                stars=repo.stars,
             )
         )
 
@@ -137,7 +139,7 @@ async def delete(
             tg.create_task(workspace.projects.delete(id))
 
 
-app = Typer()
+app = Typer(pretty_exceptions_enable=False)
 app.add_typer(project_app)
 
 
@@ -166,19 +168,6 @@ async def create(
         posting = await client.get_posting(url)
         selected_projects = await ai.select_projects(workspace, posting)
         pprint(selected_projects)
-
-
-# TODO: Remove this command
-@app.command()
-@asyncio_run
-async def patch_projects() -> None:
-    async def append_last_major_activity(project: Project) -> None:
-        project.tags = await ai.generate_tags(project.summary)
-        await workspace.projects.set(project)
-
-    async with asyncio.TaskGroup() as tg:
-        async for project in workspace.projects:
-            tg.create_task(append_last_major_activity(project))
 
 
 def main() -> None:

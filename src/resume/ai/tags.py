@@ -1,5 +1,6 @@
 from pydantic_ai import Agent
 
+from resume import git
 from resume.ai.core import base_model_settings, gemini_2_0_flash
 
 
@@ -30,6 +31,11 @@ Only generate tags based on what is explicitly stated in the summary. Do not inf
 )
 
 
-async def generate_tags(summary: str) -> list[str]:
-    result = await agent.run(summary)
+async def generate_tags(repo_tags: list[git.Tag], summary: str) -> list[str]:
+    tags = ", ".join(tag.name for tag in repo_tags)
+    result = await agent.run(f"""\
+Repository tags: {tags}
+Project summary:
+
+{summary}""")
     return result.output

@@ -24,6 +24,7 @@ from github.GithubObject import GithubObject as RawObject
 from github.NamedUser import NamedUser as RawNamedUser
 from github.PaginatedList import PaginatedList as RawPagination
 from github.Repository import Repository as RawRepository
+from github.Tag import Tag as RawTag
 from pydantic import SecretStr
 
 from resume import git
@@ -48,7 +49,7 @@ class _PaginationAdapter(Pagination[_TModel], Generic[_TRaw, _TModel]):
         *,
         init: Callable[[], RawPagination[_TRaw]],
         model_type: type[_TModel],
-        get_by_key: Callable[[str], Awaitable[_TModel]],
+        get_by_key: Callable[[str], Awaitable[_TModel]] | None = None,
     ) -> None:
         self.init = init
         self.model_type = model_type
@@ -69,18 +70,22 @@ class _PaginationAdapter(Pagination[_TModel], Generic[_TRaw, _TModel]):
 
     @overload
     def __getitem__(
-        self, key: slice[int | None, int, None]
+        self, key: slice[int | None, int | None, None]
     ) -> Awaitable[list[_TModel]]: ...
 
     @override
     def __getitem__(
         self,
-        key: int | str | slice[int | None, int, None],
+        key: int | str | slice[int | None, int | None, None],
     ) -> Awaitable[_TModel | list[_TModel]]:
         match key:
             case int():
                 return self._get_by_index(key)
             case str():
+                if not self.get_by_key:
+                    raise TypeError(
+                        f"{self.model_type.__name__} pagination does not support str key access"
+                    )
                 return self.get_by_key(key)
             case slice():
                 return self._get_by_slice(key)
@@ -93,7 +98,10 @@ class _PaginationAdapter(Pagination[_TModel], Generic[_TRaw, _TModel]):
         raw = await asyncio.to_thread(self._list.__getitem__, index)
         return self.model_type.from_raw(raw)
 
-    async def _get_by_slice(self, s: slice[int | None, int, None]) -> list[_TModel]:
+    async def _get_by_slice(
+        self,
+        s: slice[int | None, int | None, None],
+    ) -> list[_TModel]:
         items = await asyncio.to_thread(self._list.__getitem__, s)
         return [self.model_type.from_raw(raw) for raw in items]
 
@@ -170,6 +178,22 @@ class Repo(git.Repo, _Model[RawRepository]):
         raw = await asyncio.to_thread(self.raw.get_commit, sha)
         return Commit(raw)
 
+    @property
+    @override
+    def tags(self) -> Pagination[git.Tag]:
+        return cast(
+            Pagination[git.Tag],
+            _PaginationAdapter(
+                init=self.raw.get_tags,
+                model_type=Tag,
+            ),
+        )
+
+    @property
+    @override
+    def stars(self) -> int:
+        return self.raw.stargazers_count
+
 
 class User(git.User, _Model[RawAuthUser | RawNamedUser]):
     def __init__(self, raw: RawNamedUser | RawAuthUser) -> None:
@@ -245,6 +269,21 @@ class Commit(git.Commit, _Model[RawCommit]):
     @property
     def author_date(self) -> datetime:
         return self.raw.commit.author.date
+
+
+class Tag(git.Tag, _Model[RawTag]):
+    def __init__(self, raw: RawTag) -> None:
+        self.raw = raw
+
+    @classmethod
+    @override
+    def from_raw(cls, raw: RawTag) -> Tag:
+        return cls(raw)
+
+    @property
+    @override
+    def name(self) -> str:
+        return self.raw.name
 
 
 class Client(git.Hub):

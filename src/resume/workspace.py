@@ -97,8 +97,8 @@ class ResourceService(AsyncIterable[T]):
         return resource
 
     async def _get_or_missing(self, id: str) -> T | _Missing:
+        path = self._get_path(id)
         try:
-            path = self._get_path(id)
             async with aiofiles.open(path, "rb") as f:
                 data = await f.read()
             return self.format.load(id, data)
@@ -145,17 +145,17 @@ class ResourceService(AsyncIterable[T]):
         self._all_cached = True
 
     def _get_path(self, id: str) -> Path:
-        return self.path / id
+        return self.path / f"{id}{self.format.ext}"
 
     def _get_id(self, path: str) -> str:
-        rel = Path(path).relative_to(self.path)
-        return "/".join(rel.parts)
+        return "/".join(Path(path).with_suffix("").parts)
 
 
 class Project(BaseModel):
     id: str
     last_major_activity: datetime
     tags: list[str] = []
+    stars: int
     summary: str
 
 
@@ -169,7 +169,7 @@ class MarkdownProjectFormat(ResourceFormat[Project]):
 
     @override
     def load(self, id: str, data: bytes) -> Project:
-        post = frontmatter.load(data.decode())
+        post = frontmatter.loads(data.decode())
         return Project.model_validate(
             {
                 **post.metadata,
