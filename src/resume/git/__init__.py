@@ -1,11 +1,8 @@
-import asyncio
 from datetime import datetime
 from typing import (
     AsyncIterable,
     AsyncIterator,
     Awaitable,
-    Generic,
-    Iterable,
     Protocol,
     Sized,
     TypeVar,
@@ -16,49 +13,17 @@ from typing import (
 T = TypeVar("T")
 
 
-class Paginable(Sized, Iterable[T], Protocol):
-    @overload
-    def __getitem__(self, key: int | str) -> T: ...
-
-    @overload
-    def __getitem__(self, key: slice) -> list[T]: ...
-
-    def __getitem__(self, key: int | str | slice) -> T | list[T]: ...
-
-
-class AsyncPaginable(Sized, AsyncIterable[T], Protocol):
+class Pagination(Sized, AsyncIterable[T], Protocol):
     @overload
     def __getitem__(self, key: int | str) -> Awaitable[T]: ...
 
     @overload
-    def __getitem__(self, key: slice) -> Awaitable[list[T]]: ...
+    def __getitem__(self, key: slice[int | None, int, None]) -> Awaitable[list[T]]: ...
 
-    def __getitem__(self, key: int | str | slice) -> Awaitable[T | list[T]]: ...
-
-
-class AsyncPaginableAdapter(Generic[T]):
-    def __init__(self, paginable: Paginable[T]) -> None:
-        self._paginable = paginable
-
-    def __len__(self) -> int:
-        return len(self._paginable)
-
-    @overload
-    def __getitem__(self, key: int | str) -> Awaitable[T]: ...
-
-    @overload
-    def __getitem__(self, key: slice) -> Awaitable[list[T]]: ...
-
-    def __getitem__(self, key: int | str | slice) -> Awaitable[T | list[T]]:
-        return asyncio.to_thread(lambda: self._paginable[key])
-
-    async def __aiter__(self) -> AsyncIterator[T]:
-        i = iter(self._paginable)
-        while True:
-            item = await asyncio.to_thread(next, i, None)
-            if item is None:
-                break
-            yield item
+    def __getitem__(
+        self,
+        key: int | str | slice[int | None, int, None],
+    ) -> Awaitable[T | list[T]]: ...
 
 
 class User(Protocol):
@@ -72,7 +37,7 @@ class User(Protocol):
     def name(self) -> str | None: ...
 
     @property
-    def repos(self) -> AsyncPaginable["Repo"]: ...
+    def repos(self) -> Pagination["Repo"]: ...
 
 
 class File(Protocol):
@@ -119,18 +84,18 @@ class Repo(Protocol):
     def description(self) -> str | None: ...
 
     @property
-    async def readme(self) -> File | None: ...
+    def readme(self) -> Awaitable[File | None]: ...
 
     @property
     def files(self) -> AsyncIterator[File]: ...
 
     @property
-    def commits(self) -> AsyncPaginable[Commit]: ...
+    def commits(self) -> Pagination[Commit]: ...
 
 
 class Hub(Protocol):
     @property
-    async def user(self) -> User: ...
+    def user(self) -> Awaitable[User]: ...
 
     @property
-    def repos(self) -> AsyncPaginable[Repo]: ...
+    def repos(self) -> Pagination[Repo]: ...

@@ -1,12 +1,14 @@
+from dataclasses import dataclass
 from datetime import datetime
-from typing import TypedDict
+
 from pydantic_ai import Agent
 
 from resume.ai.core import base_model_settings, gemini_2_0_flash
 from resume.git import File, Repo, User
 
 
-class Judgment(TypedDict):
+@dataclass
+class Judgment:
     reasoning: str
     result: bool
 
@@ -47,6 +49,13 @@ async def judge_project(user: User, repo: Repo) -> Judgment:
     if count == limit:
         structure += "\nNumber of files is limited to {limit}, but more files exist."
 
+    latest_commits = "\n".join(
+        [
+            f"- {commit.author.name} ({commit.author.email}) on {commit.author_date.isoformat()}: {commit.message}"
+            for commit in await repo.commits[:10]
+        ]
+    )
+
     prompt = f"""\
 My name: {user.name}
 My login: {user.login}
@@ -59,7 +68,7 @@ Project structure:
 
 Latest commits:
 
-{"\n".join([f"- {commit.author.name} ({commit.author.email}) on {commit.author_date.isoformat()}: {commit.message}" for commit in await repo.commits[:10]])}
+{latest_commits}
 """
 
     readme = await repo.readme

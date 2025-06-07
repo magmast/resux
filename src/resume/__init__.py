@@ -12,7 +12,8 @@ from resume import ai
 from resume.git import Repo, github
 from resume.job_boards.no_fluff_jobs import Client as NfjClient
 from resume.settings import settings
-from resume.utils import Project, Workspace, asyncio_run
+from resume.utils import asyncio_run
+from resume.workspace import Project, Workspace
 
 logfire.configure()
 logfire.instrument_pydantic_ai()
@@ -38,7 +39,7 @@ class ConflictStrategy(StrEnum):
         if self == ConflictStrategy.OVERWRITE:
             return True
 
-        already_exists = await workspace.projects.acontains(id)
+        already_exists = await workspace.projects.contains(id)
         if not already_exists:
             return True
 
@@ -87,12 +88,12 @@ async def summarize(
             last_major_activity_task = tg.create_task(ai.find_last_major_activity(repo))
         summary = await summary_task
         last_major_activity = await last_major_activity_task
-        await workspace.projects.write(
+        await workspace.projects.set(
             Project(
                 id=repo.full_name,
                 summary=summary,
                 tags=await ai.generate_tags(summary),
-                last_major_activity=last_major_activity["date"],
+                last_major_activity=last_major_activity.date,
             )
         )
 
@@ -133,7 +134,7 @@ async def delete(
 
     async with asyncio.TaskGroup() as tg:
         for id in ids:
-            tg.create_task(workspace.projects.adel(id))
+            tg.create_task(workspace.projects.delete(id))
 
 
 app = Typer()
@@ -173,7 +174,7 @@ async def create(
 async def patch_projects() -> None:
     async def append_last_major_activity(project: Project) -> None:
         project.tags = await ai.generate_tags(project.summary)
-        await workspace.projects.write(project)
+        await workspace.projects.set(project)
 
     async with asyncio.TaskGroup() as tg:
         async for project in workspace.projects:

@@ -1,12 +1,13 @@
-from typing import TypedDict
+from dataclasses import dataclass
 from pydantic_ai import Agent
 
 from resume.ai.core import base_model_settings, gemini_2_5_flash
 from resume.job_boards import Posting
-from resume.utils import Workspace
+from resume.workspace import Workspace
 
 
-class SelectedProject(TypedDict):
+@dataclass
+class SelectedProject:
     reasoning: str
     id: str
 

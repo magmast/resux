@@ -1,103 +1,215 @@
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
 import asyncio
 from datetime import datetime
-from typing import AsyncIterator, Callable, Generic, Iterator, TypeVar, cast, overload
+from functools import cached_property
+from typing import (
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Generic,
+    Self,
+    TypeVar,
+    cast,
+    overload,
+    override,
+)
 
 from github import Github, UnknownObjectException
-from github.AuthenticatedUser import AuthenticatedUser
-from github.Commit import Commit as CommitObject
-from github.ContentFile import ContentFile
-from github.GithubObject import GithubObject
-from github.NamedUser import NamedUser
-from github.PaginatedList import PaginatedList
-from github.Repository import Repository
+from github.AuthenticatedUser import AuthenticatedUser as RawAuthUser
+from github.Commit import Commit as RawCommit
+from github.ContentFile import ContentFile as RawFile
+from github.GithubObject import GithubObject as RawObject
+from github.NamedUser import NamedUser as RawNamedUser
+from github.PaginatedList import PaginatedList as RawPagination
+from github.Repository import Repository as RawRepository
 from pydantic import SecretStr
 
 from resume import git
-from resume.git import AsyncPaginable, AsyncPaginableAdapter
+from resume.git import Pagination
 
 
-TOriginal = TypeVar("TOriginal", bound=GithubObject)
-TItem = TypeVar("TItem")
+_TRaw = TypeVar("_TRaw", bound=RawObject)
 
 
-class PaginableAdapter(Generic[TOriginal, TItem]):
+class _Model(ABC, Generic[_TRaw]):
+    @classmethod
+    @abstractmethod
+    def from_raw(cls, raw: _TRaw) -> Self: ...
+
+
+_TModel = TypeVar("_TModel", bound=_Model)
+
+
+class _PaginationAdapter(Pagination[_TModel], Generic[_TRaw, _TModel]):
     def __init__(
         self,
-        list: Callable[[], PaginatedList[TOriginal]],
         *,
-        map: Callable[[TOriginal], TItem],
-        by_key: Callable[[str], TOriginal] | None = None,
+        init: Callable[[], RawPagination[_TRaw]],
+        model_type: type[_TModel],
+        get_by_key: Callable[[str], Awaitable[_TModel]],
     ) -> None:
-        self._create_list = list
-        self._map = map
-        self._by_key = by_key
-        self._cached_list: PaginatedList[TOriginal] | None = None
+        self.init = init
+        self.model_type = model_type
+        self.get_by_key = get_by_key
 
-    @property
-    def _list(self) -> PaginatedList[TOriginal]:
-        if self._cached_list is None:
-            self._cached_list = self._create_list()
-        return self._cached_list
-
-    @overload
-    def __getitem__(self, key: int | str) -> TItem: ...
-
-    @overload
-    def __getitem__(self, key: slice) -> list[TItem]: ...
-
-    def __getitem__(self, key: int | str | slice) -> TItem | list[TItem]:
-        if isinstance(key, int):
-            return self._map(self._list[key])
-
-        if isinstance(key, slice):
-            return list(map(self._map, self._list[key]))
-
-        if not self._by_key:
-            raise TypeError("Invalid key type")
-
-        try:
-            return self._map(self._by_key(key))
-        except KeyError:
-            raise KeyError(key)
-
+    @override
     def __len__(self) -> int:
         return self._list.totalCount
 
-    def __iter__(self) -> Iterator[TItem]:
-        return map(self._map, iter(self._list))
+    @override
+    async def __aiter__(self) -> AsyncIterator[_TModel]:
+        items = iter(self._list)
+        while raw := await asyncio.to_thread(next, items, None):
+            yield self.model_type.from_raw(raw)
 
-    def to_async(self) -> AsyncPaginable[TItem]:
-        return AsyncPaginableAdapter(self)
+    @overload
+    def __getitem__(self, key: int | str) -> Awaitable[_TModel]: ...
+
+    @overload
+    def __getitem__(
+        self, key: slice[int | None, int, None]
+    ) -> Awaitable[list[_TModel]]: ...
+
+    @override
+    def __getitem__(
+        self,
+        key: int | str | slice[int | None, int, None],
+    ) -> Awaitable[_TModel | list[_TModel]]:
+        match key:
+            case int():
+                return self._get_by_index(key)
+            case str():
+                return self.get_by_key(key)
+            case slice():
+                return self._get_by_slice(key)
+
+    @cached_property
+    def _list(self) -> RawPagination[_TRaw]:
+        return self.init()
+
+    async def _get_by_index(self, index: int) -> _TModel:
+        raw = await asyncio.to_thread(self._list.__getitem__, index)
+        return self.model_type.from_raw(raw)
+
+    async def _get_by_slice(self, s: slice[int | None, int, None]) -> list[_TModel]:
+        items = await asyncio.to_thread(self._list.__getitem__, s)
+        return [self.model_type.from_raw(raw) for raw in items]
 
 
-class User(git.User):
-    def __init__(self, user: NamedUser | AuthenticatedUser) -> None:
-        self._user = user
+class Repo(git.Repo, _Model[RawRepository]):
+    def __init__(self, raw: RawRepository) -> None:
+        self.raw = raw
+
+    @classmethod
+    @override
+    def from_raw(cls, raw: RawRepository) -> Repo:
+        return cls(raw)
+
+    @property
+    @override
+    def owner(self) -> User:
+        return User(self.raw.owner)
+
+    @property
+    @override
+    def name(self) -> str:
+        return self.raw.name
+
+    @property
+    @override
+    def full_name(self) -> str:
+        return self.raw.full_name
+
+    @property
+    @override
+    def description(self) -> str | None:
+        return self.raw.description
+
+    @property
+    @override
+    def readme(self) -> Awaitable[File | None]:
+        return self._get_readme()
+
+    async def _get_readme(self) -> File | None:
+        try:
+            file = await asyncio.to_thread(self.raw.get_readme)
+            return File(file)
+        except UnknownObjectException as e:
+            if e.status == 404:
+                return None
+            raise
+
+    @property
+    @override
+    def files(self) -> AsyncIterator[File]:
+        return self._get_files()
+
+    async def _get_files(self) -> AsyncIterator[File]:
+        paths = [""]
+        while paths:
+            files = await asyncio.to_thread(self.raw.get_dir_contents, paths.pop())
+            paths.extend((file.path for file in files if file.type == "dir"))
+            for file in filter(lambda file: file.type == "file", files):
+                yield File(file)
+
+    @property
+    @override
+    def commits(self) -> Pagination[git.Commit]:
+        return cast(
+            Pagination[git.Commit],
+            _PaginationAdapter(
+                init=self.raw.get_commits,
+                model_type=Commit,
+                get_by_key=self._get_commit,
+            ),
+        )
+
+    async def _get_commit(self, sha: str) -> Commit:
+        raw = await asyncio.to_thread(self.raw.get_commit, sha)
+        return Commit(raw)
+
+
+class User(git.User, _Model[RawAuthUser | RawNamedUser]):
+    def __init__(self, raw: RawNamedUser | RawAuthUser) -> None:
+        self.raw = raw
+
+    @classmethod
+    @override
+    def from_raw(cls, raw: RawNamedUser | RawAuthUser) -> User:
+        return cls(raw)
 
     @property
     def email(self) -> str | None:
-        return self._user.email
+        return self.raw.email
 
     @property
     def login(self) -> str:
-        return self._user.login
+        return self.raw.login
 
     @property
     def name(self) -> str | None:
-        return self._user.name
+        return self.raw.name
 
     @property
-    def repos(self) -> AsyncPaginable["git.Repo"]:
-        adapter = PaginableAdapter(
-            self._user.get_repos,
-            map=lambda repo: cast(git.Repo, Repo(repo)),
-            by_key=lambda name: self._user.get_repo(name),
+    def repos(self) -> Pagination[git.Repo]:
+        return cast(
+            Pagination[git.Repo],
+            _PaginationAdapter(
+                init=self.raw.get_repos,
+                model_type=Repo,
+                get_by_key=self._get_repo,
+            ),
         )
-        return adapter.to_async()
+
+    async def _get_repo(self, key: str) -> Repo:
+        raw = await asyncio.to_thread(self.raw.get_repo, key)
+        return Repo(raw)
 
 
 class File(git.File):
-    def __init__(self, file: ContentFile) -> None:
+    def __init__(self, file: RawFile) -> None:
         self._file = file
 
     @property
@@ -109,90 +221,57 @@ class File(git.File):
         return self._file.decoded_content
 
 
-class Commit(git.Commit):
-    def __init__(self, commit: CommitObject) -> None:
-        self._commit = commit
+class Commit(git.Commit, _Model[RawCommit]):
+    def __init__(self, raw: RawCommit) -> None:
+        self.raw = raw
+
+    @classmethod
+    @override
+    def from_raw(cls, raw: RawCommit) -> Commit:
+        return cls(raw)
 
     @property
     def sha(self) -> str:
-        return self._commit.sha
+        return self.raw.sha
 
     @property
     def message(self) -> str:
-        return self._commit.commit.message
+        return self.raw.commit.message
 
     @property
     def author(self) -> git.CommitAuthor:
-        return self._commit.commit.author
+        return self.raw.commit.author
 
     @property
     def author_date(self) -> datetime:
-        return self._commit.commit.author.date
-
-
-class Repo(git.Repo):
-    def __init__(self, repo: Repository) -> None:
-        self._repo = repo
-
-    @property
-    def owner(self) -> User:
-        return User(self._repo.owner)
-
-    @property
-    def name(self) -> str:
-        return self._repo.name
-
-    @property
-    def full_name(self) -> str:
-        return self._repo.full_name
-
-    @property
-    def description(self) -> str | None:
-        return self._repo.description
-
-    @property
-    async def readme(self) -> File | None:
-        try:
-            file = await asyncio.to_thread(self._repo.get_readme)
-            return File(file)
-        except UnknownObjectException as e:
-            if e.status == 404:
-                return None
-            raise
-
-    @property
-    async def files(self) -> AsyncIterator[File]:
-        paths = [""]
-        while paths:
-            files = await asyncio.to_thread(self._repo.get_dir_contents, paths.pop())
-            paths.extend((file.path for file in files if file.type == "dir"))
-            for file in filter(lambda file: file.type == "file", files):
-                yield File(file)
-
-    @property
-    def commits(self) -> AsyncPaginable[git.Commit]:
-        adapter = PaginableAdapter(
-            self._repo.get_commits,
-            map=lambda commit: cast(git.Commit, Commit(commit)),
-            by_key=lambda sha: self._repo.get_commit(sha),
-        )
-        return adapter.to_async()
+        return self.raw.commit.author.date
 
 
 class Client(git.Hub):
     def __init__(self, access_token: SecretStr) -> None:
-        self._client = Github(access_token.get_secret_value())
+        self._github = Github(access_token.get_secret_value())
 
     @property
-    async def user(self) -> User:
-        user = await asyncio.to_thread(self._client.get_user)
+    @override
+    def user(self) -> Awaitable[User]:
+        return self._get_user()
+
+    async def _get_user(self) -> User:
+        user = await asyncio.to_thread(self._github.get_user)
         return User(user)
 
     @property
-    def repos(self) -> AsyncPaginable[git.Repo]:
-        adapter = PaginableAdapter(
-            self._client.get_repos,
-            map=lambda repo: cast(git.Repo, Repo(repo)),
-            by_key=lambda full_name: self._client.get_repo(full_name),
+    @override
+    def repos(self) -> Pagination[git.Repo]:
+        return cast(
+            Pagination[git.Repo],
+            _PaginationAdapter(
+                init=self._github.get_repos,
+                model_type=Repo,
+                get_by_key=self._get_repo,
+            ),
         )
-        return adapter.to_async()
+
+    async def _get_repo(self, key: str) -> Repo:
+        raw = await asyncio.to_thread(self._github.get_repo, key)
+        return Repo(raw)

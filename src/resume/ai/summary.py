@@ -1,11 +1,12 @@
-from typing import TypedDict
+from dataclasses import dataclass
 from pydantic_ai import Agent, ModelRetry, RunContext
 
 from resume.ai.core import base_model_settings, grok_3_mini
 from resume.git import File, Repo
 
 
-class Deps(TypedDict):
+@dataclass
+class Deps:
     files: list[File]
 
 
@@ -39,7 +40,7 @@ Instructions:
 async def read_file(ctx: RunContext[Deps], filepath: str) -> str:
     """Get the content of a file in the repository."""
 
-    for file in ctx.deps["files"]:
+    for file in ctx.deps.files:
         if file.path == filepath:
             return file.content.decode()
 
@@ -56,7 +57,7 @@ async def summarize_project(repo: Repo) -> str:
     structure = "\n".join([f"- {file.path}" for file in files])
     result = await agent.run(
         f"Project structure:\n\n{structure}",
-        deps={"files": files},
+        deps=Deps(files=files),
     )
 
     return result.output

@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import datetime
 from typing import TypedDict
 from pydantic_ai import Agent, RunContext
@@ -6,11 +7,13 @@ from resume.ai.core import base_model_settings, gemini_2_0_flash
 from resume.git import Repo
 
 
-class Deps(TypedDict):
+@dataclass
+class Deps:
     repo: Repo
 
 
-class Output(TypedDict):
+@dataclass
+class Output:
     reasoning: str
     date: datetime
 
@@ -54,7 +57,7 @@ async def list_commits(
 ) -> list[CommitDict]:
     """Get the list of commits in the specified range."""
 
-    commits = await ctx.deps["repo"].commits[offset : offset + limit]
+    commits = await ctx.deps.repo.commits[offset : offset + limit]
     return [
         CommitDict(date=commit.author_date.isoformat(), message=commit.message)
         for commit in commits
@@ -62,5 +65,5 @@ async def list_commits(
 
 
 async def find_last_major_activity(repo: Repo) -> Output:
-    result = await agent.run(deps={"repo": repo})
+    result = await agent.run(deps=Deps(repo=repo))
     return result.output
