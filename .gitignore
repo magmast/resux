@@ -1,0 +1,17 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.logfire
+
+# Virtual environments
+.venv
+
+# Environment variables
+.env
+
+# Resume directory used in development
+/resume

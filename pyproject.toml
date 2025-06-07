@@ -1,0 +1,26 @@
+[project]
+name = "resume"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Maciej Augustyniak", email = "maciej@augustyniak.app" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "aiofiles>=24.1.0",
+    "pydantic-ai[logfire,openai]>=0.2.14",
+    "pydantic-settings>=2.9.1",
+    "pygithub>=2.6.1",
+    "python-frontmatter>=1.1.0",
+    "questionary>=2.1.0",
+    "selectolax>=0.3.29",
+    "typer>=0.16.0",
+]
+
+[project.scripts]
+resume = "resume:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
