@@ -24,8 +24,8 @@ async def init(
 ) -> None:
     """Initialize a resume repository."""
 
-    env = await form.ask_async(ws.Environment)
-    user = await form.ask_async(ws.User)
+    env = await form.ask(ws.Environment)
+    user = await form.ask(ws.User)
     await ws.Workspace.init(path, override=override, environment=env, user=user)
 
 

@@ -44,7 +44,13 @@ class ResourceFormat(Protocol):
 
     def load(self, id: str, data: bytes, resource_type: type[T]) -> T: ...
 
-    def dump(self, resource: BaseModel) -> bytes: ...
+    def dump(
+        self,
+        resource: BaseModel,
+        *,
+        exclude_none: bool = False,
+        exclude_defaults: bool = False,
+    ) -> bytes: ...
 
 
 class MarkdownResourceFormat(ResourceFormat):
@@ -64,10 +70,20 @@ class MarkdownResourceFormat(ResourceFormat):
         )
 
     @override
-    def dump(self, resource: BaseModel) -> bytes:
+    def dump(
+        self,
+        resource: BaseModel,
+        *,
+        exclude_defaults: bool = False,
+        exclude_none: bool = False,
+    ) -> bytes:
         from frontmatter import Post
 
-        metadata = resource.model_dump(by_alias=True)
+        metadata = resource.model_dump(
+            by_alias=True,
+            exclude_defaults=exclude_defaults,
+            exclude_none=exclude_none,
+        )
         content = metadata.pop("content")
         post = Post(content, **metadata)
         return frontmatter.dumps(post).encode()
@@ -215,8 +231,8 @@ class Project(BaseResource):
 
 class Environment(BaseSettings):
     logfire: Annotated[bool, FormField("Enable logfire?")] = False
-    openrouter_api_key: Annotated[SecretStr, FormField("OpenRouter API key")]
-    github_access_token: Annotated[SecretStr, FormField("GitHub access token")]
+    openrouter_api_key: Annotated[SecretStr, Field(title="OpenRouter API key")]
+    github_access_token: Annotated[SecretStr, Field(title="GitHub access token")]
 
 
 class BaseWorkspaceKwargs(TypedDict, total=False):
@@ -255,7 +271,7 @@ class Workspace:
 
     async def set_user(self, user: User) -> None:
         async with aiofiles.open(self.path / f"about-me{self.format.ext}", "wb") as f:
-            await f.write(self.format.dump(user))
+            await f.write(self.format.dump(user, exclude_none=True))
 
 
 class _WorkspaceInitializer:
