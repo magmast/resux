@@ -57,7 +57,7 @@ async def list_commits(
 ) -> list[CommitDict]:
     """Get the list of commits in the specified range."""
 
-    commits = await ctx.deps.repo.commits[offset : offset + limit]
+    commits = await ctx.deps.repo.commits.slice(offset, offset + limit)
     return [
         CommitDict(date=commit.author_date.isoformat(), message=commit.message)
         for commit in commits

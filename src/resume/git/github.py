@@ -12,7 +12,6 @@ from typing import (
     Self,
     TypeVar,
     cast,
-    overload,
     override,
 )
 
@@ -65,45 +64,31 @@ class _PaginationAdapter(Pagination[_TModel], Generic[_TRaw, _TModel]):
         while raw := await asyncio.to_thread(next, items, None):
             yield self.model_type.from_raw(raw)
 
-    @overload
-    def __getitem__(self, key: int | str) -> Awaitable[_TModel]: ...
-
-    @overload
-    def __getitem__(
-        self, key: slice[int | None, int | None, None]
-    ) -> Awaitable[list[_TModel]]: ...
-
-    @override
-    def __getitem__(
-        self,
-        key: int | str | slice[int | None, int | None, None],
-    ) -> Awaitable[_TModel | list[_TModel]]:
-        match key:
-            case int():
-                return self._get_by_index(key)
-            case str():
-                if not self.get_by_key:
-                    raise TypeError(
-                        f"{self.model_type.__name__} pagination does not support str key access"
-                    )
-                return self.get_by_key(key)
-            case slice():
-                return self._get_by_slice(key)
-
     @cached_property
     def _list(self) -> RawPagination[_TRaw]:
         return self.init()
 
-    async def _get_by_index(self, index: int) -> _TModel:
-        raw = await asyncio.to_thread(self._list.__getitem__, index)
+    @override
+    async def get(self, key: int | str) -> _TModel:
+        match key:
+            case int():
+                raw = await asyncio.to_thread(self._list.__getitem__, key)
+            case str() if self.get_by_key:
+                raw = await self.get_by_key(key)
+            case _:
+                raise TypeError("Indexing by str is not supported for this model")
+
         return self.model_type.from_raw(raw)
 
-    async def _get_by_slice(
-        self,
-        s: slice[int | None, int | None, None],
-    ) -> list[_TModel]:
-        items = await asyncio.to_thread(self._list.__getitem__, s)
-        return [self.model_type.from_raw(raw) for raw in items]
+    @override
+    async def slice(self, start: int, stop: int) -> list[_TModel]:
+        raws = await asyncio.to_thread(self._list.__getitem__, slice(start, stop))
+        return [self.model_type.from_raw(raw) for raw in raws]
+
+    @override
+    async def all(self) -> list[_TModel]:
+        raws = await asyncio.to_thread(self._list.__getitem__, slice(len(self)))
+        return [self.model_type.from_raw(raw) for raw in raws]
 
 
 class Repo(git.Repo, _Model[RawRepository]):
@@ -135,12 +120,8 @@ class Repo(git.Repo, _Model[RawRepository]):
     def description(self) -> str | None:
         return self.raw.description
 
-    @property
     @override
-    def readme(self) -> Awaitable[File | None]:
-        return self._get_readme()
-
-    async def _get_readme(self) -> File | None:
+    async def get_readme(self) -> File | None:
         try:
             file = await asyncio.to_thread(self.raw.get_readme)
             return File(file)
@@ -149,12 +130,8 @@ class Repo(git.Repo, _Model[RawRepository]):
                 return None
             raise
 
-    @property
     @override
-    def files(self) -> AsyncIterator[File]:
-        return self._get_files()
-
-    async def _get_files(self) -> AsyncIterator[File]:
+    async def get_files(self) -> AsyncIterator[File]:
         paths = [""]
         while paths:
             files = await asyncio.to_thread(self.raw.get_dir_contents, paths.pop())
@@ -165,18 +142,18 @@ class Repo(git.Repo, _Model[RawRepository]):
     @property
     @override
     def commits(self) -> Pagination[git.Commit]:
+        async def _get_commit(sha: str) -> Commit:
+            raw = await asyncio.to_thread(self.raw.get_commit, sha)
+            return Commit(raw)
+
         return cast(
             Pagination[git.Commit],
             _PaginationAdapter(
                 init=self.raw.get_commits,
                 model_type=Commit,
-                get_by_key=self._get_commit,
+                get_by_key=_get_commit,
             ),
         )
-
-    async def _get_commit(self, sha: str) -> Commit:
-        raw = await asyncio.to_thread(self.raw.get_commit, sha)
-        return Commit(raw)
 
     @property
     @override
@@ -218,18 +195,18 @@ class User(git.User, _Model[RawAuthUser | RawNamedUser]):
 
     @property
     def repos(self) -> Pagination[git.Repo]:
+        async def _get_repo(key: str) -> Repo:
+            raw = await asyncio.to_thread(self.raw.get_repo, key)
+            return Repo(raw)
+
         return cast(
             Pagination[git.Repo],
             _PaginationAdapter(
                 init=self.raw.get_repos,
                 model_type=Repo,
-                get_by_key=self._get_repo,
+                get_by_key=_get_repo,
             ),
         )
-
-    async def _get_repo(self, key: str) -> Repo:
-        raw = await asyncio.to_thread(self.raw.get_repo, key)
-        return Repo(raw)
 
 
 class File(git.File):
@@ -290,27 +267,23 @@ class Client(git.Hub):
     def __init__(self, access_token: SecretStr) -> None:
         self._github = Github(access_token.get_secret_value())
 
-    @property
     @override
-    def user(self) -> Awaitable[User]:
-        return self._get_user()
-
-    async def _get_user(self) -> User:
+    async def get_user(self) -> User:
         user = await asyncio.to_thread(self._github.get_user)
         return User(user)
 
     @property
     @override
     def repos(self) -> Pagination[git.Repo]:
+        async def _get_repo(key: str) -> Repo:
+            raw = await asyncio.to_thread(self._github.get_repo, key)
+            return Repo(raw)
+
         return cast(
             Pagination[git.Repo],
             _PaginationAdapter(
                 init=self._github.get_repos,
                 model_type=Repo,
-                get_by_key=self._get_repo,
+                get_by_key=_get_repo,
             ),
         )
-
-    async def _get_repo(self, key: str) -> Repo:
-        raw = await asyncio.to_thread(self._github.get_repo, key)
-        return Repo(raw)

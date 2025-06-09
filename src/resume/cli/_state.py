@@ -4,8 +4,10 @@ from pathlib import Path
 from typing import Annotated, override
 
 import logfire
+from pydantic_ai.providers.openrouter import OpenRouterProvider
 import typer
 
+from resume.ai.core import LazyOpenRouterModel
 from resume.git import github as gh
 from resume.ws import Workspace
 
@@ -32,11 +34,20 @@ def callback(
     ] = _find_workspace(),
 ) -> None:
     global _workspace
-    if workspace is not None:
-        _workspace = Workspace(workspace)
-        if _workspace.environment.logfire:
-            logfire.configure()
-            logfire.instrument_pydantic_ai()
+    if workspace is None:
+        return
+
+    _workspace = Workspace(workspace)
+
+    LazyOpenRouterModel.set_provider(
+        OpenRouterProvider(
+            api_key=_workspace.environment.openrouter_api_key.get_secret_value()
+        )
+    )
+
+    if _workspace.environment.logfire:
+        logfire.configure()
+        logfire.instrument_pydantic_ai()
 
 
 def workspace() -> Workspace:

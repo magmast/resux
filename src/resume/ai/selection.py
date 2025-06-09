@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 from pydantic_ai import Agent
 
-from resume.ai.core import base_model_settings, gemini_2_5_flash
+from resume import ws
+from resume.ai.core import gemini_2_0_flash, base_model_settings
 from resume.job_boards import Posting
-from resume.workspace import Workspace
 
 
 @dataclass
@@ -13,7 +13,7 @@ class SelectedProject:
 
 
 agent = Agent(
-    gemini_2_5_flash,
+    model=gemini_2_0_flash,
     output_type=list[SelectedProject],
     model_settings=base_model_settings,
     instructions="""\
@@ -25,7 +25,7 @@ best match the posting.""",
 
 
 async def select_projects(
-    workspace: Workspace,
+    workspace: ws.Workspace,
     posting: Posting,
 ) -> list[SelectedProject]:
     projects_desc = "\n\n---\n\n".join(
@@ -47,7 +47,8 @@ async def select_projects(
         if req["optional"]
     )
 
-    result = await agent.run(f"""
+    result = await agent.run(
+        f"""\
 Projects:
 
 {projects_desc}
@@ -64,8 +65,7 @@ Posting:
 
 ## Nice to Have
 
-{nice_to_have}
-
-""")
+{nice_to_have}"""
+    )
 
     return result.output

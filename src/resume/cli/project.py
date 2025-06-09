@@ -66,7 +66,7 @@ async def summarize(
         summary, last_major_activity, tags = await asyncio.gather(
             ai.summarize_project(repo),
             ai.find_last_major_activity(repo),
-            repo.tags[:],
+            repo.tags.all(),
         )
 
         await _state.workspace().projects.set(
@@ -79,11 +79,11 @@ async def summarize(
             )
         )
 
-    user = await _state.github().user
+    user = await _state.github().get_user()
     if names:
         full_names = [name if "/" in name else f"{user.login}/{name}" for name in names]
         repos = await asyncio.gather(
-            *(map(_state.github().repos.__getitem__, full_names))
+            *(_state.github().repos.get(name) for name in full_names)
         )
     else:
         all_repos = user.repos
@@ -95,9 +95,7 @@ async def summarize(
             ],
         ).ask_async()
 
-    async with asyncio.TaskGroup() as tg:
-        for repo in repos:
-            tg.create_task(summarize_repo(repo))
+    await asyncio.gather(*(summarize_repo(repo) for repo in repos))
 
 
 @app.command()
@@ -110,13 +108,17 @@ async def delete(
 ) -> None:
     """Delete projects from the workspace."""
 
+    workspace = _state.workspace()
+
     if ids is None:
+        all_ids = await workspace.projects.ids()
+        if not all_ids:
+            raise RuntimeError("No projects found in the workspace")
+
         selected_ids: list[str] = await questionary.checkbox(
             "Select projects to delete",
-            choices=[id async for id in _state.workspace().projects.ids],
+            choices=all_ids,
         ).ask_async()
         ids = selected_ids
 
-    async with asyncio.TaskGroup() as tg:
-        for id in ids:
-            tg.create_task(_state.workspace().projects.delete(id))
+    await asyncio.gather(*(workspace.projects.delete(id) for id in ids))

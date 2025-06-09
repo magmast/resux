@@ -5,7 +5,7 @@ from resume.ai.core import base_model_settings, gemini_2_0_flash
 
 
 agent = Agent(
-    gemini_2_0_flash,
+    model=gemini_2_0_flash,
     model_settings=base_model_settings,
     output_type=list[str],
     instructions="""\
@@ -33,9 +33,11 @@ Only generate tags based on what is explicitly stated in the summary. Do not inf
 
 async def generate_tags(repo_tags: list[git.Tag], summary: str) -> list[str]:
     tags = ", ".join(tag.name for tag in repo_tags)
-    result = await agent.run(f"""\
+    result = await agent.run(
+        f"""\
 Repository tags: {tags}
 Project summary:
 
-{summary}""")
+{summary}""",
+    )
     return result.output

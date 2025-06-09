@@ -4,11 +4,9 @@ from datetime import datetime
 from typing import (
     AsyncIterable,
     AsyncIterator,
-    Awaitable,
     Protocol,
     Sized,
     TypeVar,
-    overload,
 )
 
 
@@ -16,18 +14,11 @@ T = TypeVar("T")
 
 
 class Pagination(Sized, AsyncIterable[T], Protocol):
-    @overload
-    def __getitem__(self, key: int | str) -> Awaitable[T]: ...
+    async def get(self, key: int | str) -> T: ...
 
-    @overload
-    def __getitem__(
-        self, key: slice[int | None, int | None, None]
-    ) -> Awaitable[list[T]]: ...
+    async def slice(self, start: int, stop: int) -> list[T]: ...
 
-    def __getitem__(
-        self,
-        key: int | str | slice[int | None, int | None, None],
-    ) -> Awaitable[T | list[T]]: ...
+    async def all(self) -> list[T]: ...
 
 
 class User(Protocol):
@@ -92,11 +83,9 @@ class Repo(Protocol):
     @property
     def description(self) -> str | None: ...
 
-    @property
-    def readme(self) -> Awaitable[File | None]: ...
+    async def get_readme(self) -> File | None: ...
 
-    @property
-    def files(self) -> AsyncIterator[File]: ...
+    def get_files(self) -> AsyncIterator[File]: ...
 
     @property
     def commits(self) -> Pagination[Commit]: ...
@@ -109,8 +98,7 @@ class Repo(Protocol):
 
 
 class Hub(Protocol):
-    @property
-    def user(self) -> Awaitable[User]: ...
+    async def get_user(self) -> User: ...
 
     @property
     def repos(self) -> Pagination[Repo]: ...

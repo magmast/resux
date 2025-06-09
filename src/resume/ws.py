@@ -9,7 +9,6 @@ from typing import (
     Annotated,
     AsyncIterable,
     AsyncIterator,
-    Awaitable,
     NotRequired,
     Protocol,
     TypeVar,
@@ -21,7 +20,7 @@ from typing import (
 import aiofiles
 from aiofiles import os
 import frontmatter
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from pydantic_settings import BaseSettings
 
 from resume.form import FormField
@@ -113,26 +112,17 @@ class ResourceService(AsyncIterable[T]):
     @override
     async def __aiter__(self) -> AsyncIterator[T]:
         resources: list[asyncio.Task[T]] = []
-        async for id in self.ids:
+        for id in await self.ids():
             resources.append(asyncio.create_task(self.get(id)))
 
         for resource in asyncio.as_completed(resources):
             yield await resource
 
-    @property
-    def ids(self) -> AsyncIterator[str]:
-        return self._get_ids()
-
-    async def _get_ids(self) -> AsyncIterator[str]:
+    async def ids(self) -> list[str]:
         await self._cache_missing_ids()
-        for id in self._cache:
-            yield id
+        return list(self._cache)
 
-    @property
-    def size(self) -> Awaitable[int]:
-        return self._get_size()
-
-    async def _get_size(self) -> int:
+    async def size(self) -> int:
         await self._cache_missing_ids()
         return sum(
             1 for value in self._cache.values() if not isinstance(value, _Missing)
@@ -223,6 +213,8 @@ class User(BaseModel):
 
 
 class Project(BaseResource):
+    model_config = ConfigDict(validate_by_name=True)
+
     last_major_activity: datetime
     tags: list[str] = []
     stars: int

@@ -53,7 +53,7 @@ async def read_file(ctx: RunContext[Deps], filepath: str) -> str:
 async def summarize_project(repo: Repo) -> str:
     """Summarize a project."""
 
-    files = [file async for file in repo.files]
+    files = [file async for file in repo.get_files()]
     structure = "\n".join([f"- {file.path}" for file in files])
     result = await agent.run(
         f"Project structure:\n\n{structure}",
