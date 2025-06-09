@@ -3,8 +3,8 @@ from datetime import datetime
 from typing import TypedDict
 from pydantic_ai import Agent, RunContext
 
-from resume.ai.core import base_model_settings, gemini_2_0_flash
-from resume.git import Repo
+from resux.ai.core import base_model_settings, gemini_2_0_flash
+from resux.git import Repo
 
 
 @dataclass

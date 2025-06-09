@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 from pydantic_ai import Agent
 
-from resume import ws
-from resume.ai.core import gemini_2_0_flash, base_model_settings
-from resume.job_boards import Posting
+from resux import ws
+from resux.ai.core import gemini_2_0_flash, base_model_settings
+from resux.job_boards import Posting
 
 
 @dataclass

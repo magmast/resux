@@ -5,9 +5,9 @@ from typing import Annotated
 import questionary
 import typer
 
-from resume import ai, git, ws
-from resume.cli import _state
-from resume.utils import asyncio_run
+from resux import ai, git, ws
+from resux.cli import _state
+from resux.utils import asyncio_run
 
 
 _conflict_lock = asyncio.Lock()

@@ -23,10 +23,10 @@ import frontmatter
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from pydantic_settings import BaseSettings
 
-from resume.form import FormField
+from resux.form import FormField
 
 
-MANIFEST_FILENAME = "resume.toml"
+MANIFEST_FILENAME = "resux.toml"
 ENV_FILENAME = ".env"
 
 

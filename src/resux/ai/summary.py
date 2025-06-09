@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from pydantic_ai import Agent, ModelRetry, RunContext
 
-from resume.ai.core import base_model_settings, grok_3_mini
-from resume.git import File, Repo
+from resux.ai.core import base_model_settings, grok_3_mini
+from resux.git import File, Repo
 
 
 @dataclass

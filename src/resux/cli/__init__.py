@@ -4,10 +4,10 @@ from typing import Annotated
 import typer
 
 
-from resume import form
-from resume import ws
-from resume.cli import _state, project
-from resume.utils import asyncio_run
+from resux import form
+from resux import ws
+from resux.cli import _state, project
+from resux.utils import asyncio_run
 
 
 app = typer.Typer(callback=_state.callback)

@@ -1,7 +1,7 @@
 from pydantic_ai import Agent
 
-from resume import git
-from resume.ai.core import base_model_settings, gemini_2_0_flash
+from resux import git
+from resux.ai.core import base_model_settings, gemini_2_0_flash
 
 
 agent = Agent(

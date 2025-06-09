@@ -7,7 +7,7 @@ import httpx
 from pydantic import BaseModel, Field
 from selectolax.parser import HTMLParser
 
-from resume.job_boards import Posting
+from resux.job_boards import Posting
 
 
 class _Specs(BaseModel):

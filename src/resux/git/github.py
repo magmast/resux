@@ -26,8 +26,8 @@ from github.Repository import Repository as RawRepository
 from github.Tag import Tag as RawTag
 from pydantic import SecretStr
 
-from resume import git
-from resume.git import Pagination
+from resux import git
+from resux.git import Pagination
 
 
 _TRaw = TypeVar("_TRaw", bound=RawObject)

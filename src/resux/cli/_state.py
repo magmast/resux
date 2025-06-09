@@ -7,16 +7,16 @@ import logfire
 from pydantic_ai.providers.openrouter import OpenRouterProvider
 import typer
 
-from resume.ai.core import LazyOpenRouterModel
-from resume.git import github as gh
-from resume.ws import Workspace
+from resux.ai.core import LazyOpenRouterModel
+from resux.git import github as gh
+from resux.ws import Workspace, MANIFEST_FILENAME
 
 
 _workspace: Workspace | None = None
 
 
 def _is_workspace_path(path: Path) -> bool:
-    return any(child.name == "resume.toml" for child in path.iterdir())
+    return any(child.name == MANIFEST_FILENAME for child in path.iterdir())
 
 
 def _find_workspace() -> Path | None:
