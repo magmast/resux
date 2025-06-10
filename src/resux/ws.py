@@ -278,6 +278,7 @@ class _WorkspaceInitializer:
             asyncio.to_thread((self.path / MANIFEST_FILENAME).touch),
             self._init_env(kwargs["environment"]),
             self._init_env_example(kwargs["environment"]),
+            self._init_gitignore(),
         )
 
         ws = Workspace(self.path, **kwargs)
@@ -320,3 +321,7 @@ class _WorkspaceInitializer:
         async with aiofiles.open(self.path / f"{ENV_FILENAME}.example", "w") as f:
             for key in env.model_dump().keys():
                 await f.write(f"{key.upper()}=\n")
+
+    async def _init_gitignore(self) -> None:
+        async with aiofiles.open(self.path / ".gitignore", "w") as f:
+            await f.write(".env")
