@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime
 from glob import glob
+import os
+from os import PathLike
 from pathlib import Path
 import shutil
 from typing import (
@@ -18,7 +20,7 @@ from typing import (
 )
 
 import aiofiles
-from aiofiles import os
+from aiofiles import os as aos
 import frontmatter
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from pydantic_settings import BaseSettings
@@ -131,7 +133,7 @@ class ResourceService(AsyncIterable[T]):
     async def contains(self, id: str) -> bool:
         resource = self._cache.get(id)
         if resource is None:
-            exists = await os.path.exists(self._get_path(id))
+            exists = await aos.path.exists(self._get_path(id))
             resource = None if exists else _Missing()
             self._cache[id] = resource
         return not isinstance(resource, _Missing)
@@ -158,7 +160,7 @@ class ResourceService(AsyncIterable[T]):
 
     async def set(self, resource: T) -> None:
         path = self._get_path(resource.id)
-        await os.makedirs(path.parent, exist_ok=True)
+        await aos.makedirs(path.parent, exist_ok=True)
 
         data = self.format.dump(resource)
         async with aiofiles.open(path, "wb") as f:
@@ -167,10 +169,10 @@ class ResourceService(AsyncIterable[T]):
     async def delete(self, id: str) -> None:
         path = self._get_path(id)
         try:
-            await os.remove(path)
-            siblings = await os.listdir(path.parent)
+            await aos.remove(path)
+            siblings = await aos.listdir(path.parent)
             if len(siblings) == 0:
-                await os.rmdir(path.parent)
+                await aos.rmdir(path.parent)
         except FileNotFoundError:
             raise KeyError(id)
 
@@ -182,6 +184,7 @@ class ResourceService(AsyncIterable[T]):
             glob,
             f"**/*{self.format.ext}",
             root_dir=self.path,
+            recursive=True,
         )
         all_ids = {self._get_id(path) for path in paths}
 
@@ -221,6 +224,14 @@ class Project(BaseResource):
     summary: Annotated[str, Field(alias="content")]
 
 
+class Profile(BaseResource):
+    network: str
+    username: str
+    website: str
+    icon: str
+    content: str = ""
+
+
 class Environment(BaseSettings):
     logfire: Annotated[bool, FormField("Enable logfire?")] = False
     openrouter_api_key: Annotated[SecretStr, Field(title="OpenRouter API key")]
@@ -242,8 +253,8 @@ class InitWorkspaceKwargs(BaseWorkspaceKwargs):
 
 
 class Workspace:
-    def __init__(self, path: Path, **kwargs: Unpack[WorkspaceKwargs]) -> None:
-        self.path = path
+    def __init__(self, path: PathLike[str], **kwargs: Unpack[WorkspaceKwargs]) -> None:
+        self.path = Path(path)
         self.environment = kwargs.get("environment") or Environment(
             _env_file=self.path / ENV_FILENAME  # type: ignore
         )
@@ -251,6 +262,11 @@ class Workspace:
         self.projects = ResourceService(
             self.path / "projects",
             resource_type=Project,
+            format=self.format,
+        )
+        self.profiles = ResourceService(
+            self.path / "profiles",
+            resource_type=Profile,
             format=self.format,
         )
 
@@ -288,17 +304,17 @@ class _WorkspaceInitializer:
 
     async def _init_root(self, *, override: bool) -> None:
         try:
-            await os.makedirs(self.path)
+            await aos.makedirs(self.path)
         except FileExistsError:
             if not await self._is_empty_dir() and not override:
                 raise
 
             await asyncio.to_thread(shutil.rmtree, self.path)
-            await os.mkdir(self.path)
+            await aos.mkdir(self.path)
 
     async def _is_empty_dir(self) -> bool:
         try:
-            children = await os.listdir(self.path)
+            children = await aos.listdir(self.path)
             return len(children) == 0
         except NotADirectoryError:
             return False
@@ -325,3 +341,16 @@ class _WorkspaceInitializer:
     async def _init_gitignore(self) -> None:
         async with aiofiles.open(self.path / ".gitignore", "w") as f:
             await f.write(".env")
+
+
+def _is_workspace(path: PathLike[str]) -> bool:
+    return any(child == MANIFEST_FILENAME for child in os.listdir(path))
+
+
+def find(path: PathLike[str] = Path.cwd()) -> Path | None:
+    path = Path(path)
+    to_check = (path, *path.parents, path / "resume")
+    return next(
+        (cur for cur in to_check if _is_workspace(cur)),
+        None,
+    )

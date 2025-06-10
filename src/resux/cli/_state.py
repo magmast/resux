@@ -1,5 +1,4 @@
 import functools
-import os
 from pathlib import Path
 from typing import Annotated, override
 
@@ -7,37 +6,25 @@ import logfire
 from pydantic_ai.providers.openrouter import OpenRouterProvider
 import typer
 
+from resux import ws
 from resux.ai.core import LazyOpenRouterModel
 from resux.git import github as gh
-from resux.ws import Workspace, MANIFEST_FILENAME
 
 
-_workspace: Workspace | None = None
-
-
-def _is_workspace_path(path: Path) -> bool:
-    return any(child.name == MANIFEST_FILENAME for child in path.iterdir())
-
-
-def _find_workspace() -> Path | None:
-    path = Path(os.getcwd())
-    if _is_workspace_path(path):
-        return path
-
-    return next((parent for parent in path.parents if _is_workspace_path(parent)), None)
+_workspace: ws.Workspace | None = None
 
 
 def callback(
     workspace: Annotated[
         Path | None,
         typer.Option(help="Path to the workspace directory."),
-    ] = _find_workspace(),
+    ] = ws.find(),
 ) -> None:
     global _workspace
     if workspace is None:
         return
 
-    _workspace = Workspace(workspace)
+    _workspace = ws.Workspace(workspace)
 
     LazyOpenRouterModel.set_provider(
         OpenRouterProvider(
@@ -50,7 +37,7 @@ def callback(
         logfire.instrument_pydantic_ai()
 
 
-def workspace() -> Workspace:
+def workspace() -> ws.Workspace:
     if _workspace is None:
         raise NotInWorkspaceError()
     return _workspace

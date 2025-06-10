@@ -6,12 +6,13 @@ import typer
 
 from resux import form
 from resux import ws
-from resux.cli import _state, project
+from resux.cli import _state, profile, project
 from resux.utils import asyncio_run
 
 
 app = typer.Typer(callback=_state.callback)
 app.add_typer(project.app)
+app.add_typer(profile.app)
 
 
 @app.command()
