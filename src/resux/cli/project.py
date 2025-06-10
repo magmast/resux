@@ -5,9 +5,11 @@ from typing import Annotated
 import questionary
 import typer
 
-from resux import ai, git, ws
+from resux import ai
 from resux.cli import _state
-from resux.utils import asyncio_run
+from resux.git import Repo
+from resux.util import asyncio_run
+from resux.ws.resource import Project
 
 
 _conflict_lock = asyncio.Lock()
@@ -59,7 +61,7 @@ async def summarize(
 ) -> None:
     """Generate a summary for one or more GitHub projects."""
 
-    async def summarize_repo(repo: git.Repo) -> None:
+    async def summarize_repo(repo: Repo) -> None:
         if not await conflict_strategy._can_write(repo.full_name):
             return
 
@@ -70,7 +72,7 @@ async def summarize(
         )
 
         await _state.workspace().projects.set(
-            ws.Project(
+            Project(
                 id=repo.full_name,
                 summary=summary,
                 tags=await ai.generate_tags(tags, summary),
@@ -87,7 +89,7 @@ async def summarize(
         )
     else:
         all_repos = user.repos
-        repos: list[git.Repo] = await questionary.checkbox(
+        repos: list[Repo] = await questionary.checkbox(
             "Select repositories to summarize",
             choices=[
                 questionary.Choice(title=repo.full_name, value=repo)
@@ -111,7 +113,7 @@ async def delete(
     workspace = _state.workspace()
 
     if ids is None:
-        all_ids = await workspace.projects.ids()
+        all_ids = workspace.projects.get_ids()
         if not all_ids:
             raise RuntimeError("No projects found in the workspace")
 

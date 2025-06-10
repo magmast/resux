@@ -5,23 +5,23 @@ from urllib.parse import urlparse
 import questionary
 import typer
 
-from resux import ws
 from resux.cli import _state
-from resux.utils import asyncio_run
+from resux.util import asyncio_run
+from resux.ws import Profile
 
 
 class _UnsupportedError(Exception):
     pass
 
 
-def _scrap_github(url: str) -> ws.Profile:
+def _scrap_github(url: str) -> Profile:
     parsed = urlparse(url)
     if parsed.hostname != "github.com":
         raise _UnsupportedError()
 
     username = parsed.path.rstrip("/").split("/")[-1]
 
-    return ws.Profile(
+    return Profile(
         id="github",
         network="GitHub",
         username=username,
@@ -30,14 +30,14 @@ def _scrap_github(url: str) -> ws.Profile:
     )
 
 
-def _scrap_gitlab(url: str) -> ws.Profile:
+def _scrap_gitlab(url: str) -> Profile:
     parsed = urlparse(url)
     if parsed.hostname != "gitlab.com":
         raise _UnsupportedError()
 
     username = parsed.path.rstrip("/").split("/")[-1]
 
-    return ws.Profile(
+    return Profile(
         id="gitlab",
         network="GitLab",
         username=username,
@@ -46,14 +46,14 @@ def _scrap_gitlab(url: str) -> ws.Profile:
     )
 
 
-def _scrap_linkedin(url: str) -> ws.Profile:
+def _scrap_linkedin(url: str) -> Profile:
     parsed = urlparse(url)
     if parsed.hostname != "www.linkedin.com":
         raise _UnsupportedError()
 
     username = parsed.path.rstrip("/").split("/")[-1]
 
-    return ws.Profile(
+    return Profile(
         id="linkedin",
         network="LinkedIn",
         username=username,
@@ -65,7 +65,7 @@ def _scrap_linkedin(url: str) -> ws.Profile:
 _SCRAPPERS = (_scrap_github, _scrap_gitlab, _scrap_linkedin)
 
 
-def _scrap(url: str) -> ws.Profile:
+def _scrap(url: str) -> Profile:
     for scrapper in _SCRAPPERS:
         try:
             return scrapper(url)
@@ -111,7 +111,7 @@ async def delete(ids: Annotated[list[str] | None, typer.Argument()] = None) -> N
 
     workspace = _state.workspace()
     if ids is None:
-        all_ids = await workspace.profiles.ids()
+        all_ids = workspace.profiles.get_ids()
         ids = cast(
             list[str],
             await questionary.checkbox(

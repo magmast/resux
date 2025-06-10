@@ -4,10 +4,9 @@ from typing import Annotated
 import typer
 
 
-from resux import form
-from resux import ws
 from resux.cli import _state, profile, project
-from resux.utils import asyncio_run
+from resux.util import asyncio_run, form
+from resux.ws import Environment, User, Workspace
 
 
 app = typer.Typer(callback=_state.callback)
@@ -26,9 +25,9 @@ async def init(
 ) -> None:
     """Initialize a resume repository."""
 
-    env = await form.ask(ws.Environment)
-    user = await form.ask(ws.User)
-    await ws.Workspace.init(path, override=override, environment=env, user=user)
+    env = await form.ask(Environment)
+    user = await form.ask(User)
+    await Workspace.init(path, override=override, env=env, user=user)
 
 
 @app.command()

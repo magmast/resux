@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
-from contextvars import ContextVar
 from functools import cached_property
 from typing import AsyncIterator, override
+
 from pydantic_ai.messages import ModelMessage, ModelResponse
 from pydantic_ai.models import Model, ModelRequestParameters, StreamedResponse
 from pydantic_ai.models.openai import OpenAIModel
@@ -10,27 +10,29 @@ from pydantic_ai.settings import ModelSettings
 
 
 base_model_settings = ModelSettings(
+    temperature=0.5,
     extra_body={
         "require_parameters": True,
         "data_collection": "deny",
-    }
+    },
 )
 
 
 class LazyOpenRouterModel(Model):
-    _provider: ContextVar[OpenRouterProvider] = ContextVar("_provider")
+    _provider: OpenRouterProvider | None = None
 
     def __init__(self, name: str) -> None:
         self.name = name
 
     @classmethod
     def set_provider(cls, provider: OpenRouterProvider) -> None:
-        cls._provider.set(provider)
+        cls._provider = provider
 
     @cached_property
     def wrapped(self) -> Model:
-        provider = self._provider.get()
-        return OpenAIModel(self.name, provider=provider)
+        if not self._provider:
+            raise ValueError("Provider is not initialized")
+        return OpenAIModel(self.name, provider=self._provider)
 
     @override
     async def request(

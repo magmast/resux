@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from pydantic_ai import Agent
 
-from resux import ws
+from resux.ws import Workspace
 from resux.ai.core import gemini_2_0_flash, base_model_settings
 from resux.job_boards import Posting
 
@@ -25,7 +25,7 @@ best match the posting.""",
 
 
 async def select_projects(
-    workspace: ws.Workspace,
+    workspace: Workspace,
     posting: Posting,
 ) -> list[SelectedProject]:
     projects_desc = "\n\n---\n\n".join(
