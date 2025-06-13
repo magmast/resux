@@ -3,7 +3,6 @@ from typing import Annotated
 
 import typer
 
-
 from resux.cli import _state, profile, project
 from resux.util import asyncio_run, form
 from resux.ws import Environment, User, Workspace

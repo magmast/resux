@@ -1,11 +1,11 @@
 from pydantic_ai import Agent
 
-from resux import git
-from resux.ai.core import base_model_settings, gemini_2_0_flash
+from resux.git import Tag
+from resux.ai._util import base_model_settings, LazyModel
 
 
 agent = Agent(
-    model=gemini_2_0_flash,
+    LazyModel("google/gemini-2.0-flash-001"),
     model_settings=base_model_settings,
     output_type=list[str],
     instructions="""\
@@ -31,7 +31,7 @@ Only generate tags based on what is explicitly stated in the summary. Do not inf
 )
 
 
-async def generate_tags(repo_tags: list[git.Tag], summary: str) -> list[str]:
+async def generate_tags(repo_tags: list[Tag], summary: str) -> list[str]:
     tags = ", ".join(tag.name for tag in repo_tags)
     result = await agent.run(
         f"""\

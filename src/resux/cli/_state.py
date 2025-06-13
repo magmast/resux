@@ -1,13 +1,12 @@
 import asyncio
-import functools
+from functools import cache
 from pathlib import Path
-from typing import Annotated, Awaitable, override
+from typing import Annotated, override
 
 import logfire
-from pydantic_ai.providers.openrouter import OpenRouterProvider
 import typer
 
-from resux.ai.core import LazyOpenRouterModel
+from resux import ai
 from resux.git import github as gh
 from resux.ws import Workspace
 
@@ -17,28 +16,21 @@ _workspace: Workspace | None = None
 
 def callback(
     workspace_path: Annotated[
-        Path | None | Awaitable[Path | None],
+        Path | None,
         typer.Option("--workspace", help="Path to the workspace directory."),
-    ] = Workspace.find_path(),
+    ] = None,
 ) -> None:
     global _workspace
 
     async def resolve_workspace() -> Path | None:
-        return (
-            await workspace_path
-            if isinstance(workspace_path, Awaitable)
-            else workspace_path
-        )
+        return await Workspace.find_path() if workspace_path is None else workspace_path
 
     workspace_path = asyncio.run(resolve_workspace())
     if workspace_path is None:
         return
 
     _workspace = Workspace(workspace_path)
-
-    LazyOpenRouterModel.set_provider(
-        OpenRouterProvider(api_key=_workspace.env.openrouter_api_key.get_secret_value())
-    )
+    ai.init(_workspace.env.openrouter_api_key)
 
     if _workspace.env.logfire:
         logfire.configure()
@@ -57,6 +49,6 @@ class NotInWorkspaceError(Exception):
         return "Workspace not found"
 
 
-@functools.cache
+@cache
 def github() -> gh.Client:
     return gh.Client(workspace().env.github_access_token)

@@ -3,25 +3,20 @@ from datetime import datetime
 from typing import TypedDict
 from pydantic_ai import Agent, RunContext
 
-from resux.ai.core import base_model_settings, gemini_2_0_flash
+from resux.ai._util import base_model_settings, LazyModel
 from resux.git import Repo
 
 
 @dataclass
-class Deps:
-    repo: Repo
-
-
-@dataclass
-class Output:
+class ActivityOutput:
     reasoning: str
     date: datetime
 
 
-agent = Agent(
-    model=gemini_2_0_flash,
-    output_type=Output,
-    deps_type=Deps,
+activity_agent = Agent(
+    LazyModel("google/gemini-2.0-flash-001"),
+    output_type=ActivityOutput,
+    deps_type=Repo,
     model_settings=base_model_settings,
     instructions="""\
 You are a senior software engineer reviewing the latest activity in a Git repository.
@@ -49,21 +44,21 @@ class CommitDict(TypedDict):
     message: str
 
 
-@agent.tool
+@activity_agent.tool
 async def list_commits(
-    ctx: RunContext[Deps],
+    ctx: RunContext[Repo],
     offset: int = 0,
     limit: int = 10,
 ) -> list[CommitDict]:
     """Get the list of commits in the specified range."""
 
-    commits = await ctx.deps.repo.commits.slice(offset, offset + limit)
+    commits = await ctx.deps.commits.slice(offset, offset + limit)
     return [
         CommitDict(date=commit.author_date.isoformat(), message=commit.message)
         for commit in commits
     ]
 
 
-async def find_last_major_activity(repo: Repo) -> Output:
-    result = await agent.run(deps=Deps(repo=repo))
+async def find_last_major_activity(repo: Repo) -> ActivityOutput:
+    result = await activity_agent.run(deps=repo)
     return result.output
