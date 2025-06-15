@@ -13,7 +13,7 @@ from pydantic_settings import BaseSettings
 from resux.util.form import FormField
 from resux.ws.collection import ResourceCollection, ResourceSingleton
 from resux.ws.format import MarkdownResourceFormat, ResourceFormat
-from resux.ws.resource import Profile, Project, User
+from resux.ws.resource import Profile as Profile, Project as Project, User as User
 
 
 MANIFEST_FILENAME = "resux.toml"

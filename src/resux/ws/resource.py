@@ -26,6 +26,7 @@ class Project(BaseResource):
     last_major_activity: datetime
     tags: list[str] = []
     stars: int
+    languages: dict[str, int]
     summary: Annotated[str, Field(alias="content")]
 
 

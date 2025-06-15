@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import TypedDict
 from pydantic_ai import Agent, RunContext
 
-from resux.ai._util import base_model_settings, LazyModel
+from resux.ai._util import base_model_settings, gemini_2_0_flash
 from resux.git import Repo
 
 
@@ -14,7 +14,7 @@ class ActivityOutput:
 
 
 activity_agent = Agent(
-    LazyModel("google/gemini-2.0-flash-001"),
+    gemini_2_0_flash,
     output_type=ActivityOutput,
     deps_type=Repo,
     model_settings=base_model_settings,

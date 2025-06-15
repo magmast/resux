@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from pydantic_ai import Agent
 
-from resux.ai._util import base_model_settings, LazyModel
+from resux.ai._util import base_model_settings, gemini_2_0_flash
 from resux.job_boards import Posting
 from resux.ws import Workspace
 
@@ -13,7 +13,7 @@ class SelectedProject:
 
 
 agent = Agent(
-    LazyModel("google/gemini-2.0-flash-001"),
+    gemini_2_0_flash,
     output_type=list[SelectedProject],
     model_settings=base_model_settings,
     instructions="""\

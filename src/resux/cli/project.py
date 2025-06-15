@@ -6,7 +6,7 @@ import questionary
 import typer
 
 from resux import ai
-from resux.cli import _state
+from resux.cli._ctx import Context, contextual
 from resux.git import Repo
 from resux.util import asyncio_run
 from resux.ws.resource import Project
@@ -20,11 +20,11 @@ class ConflictStrategy(StrEnum):
     SKIP = "skip"
     ASK = "ask"
 
-    async def _can_write(self, id: str) -> bool:
+    async def _can_write(self, ctx: Context, id: str) -> bool:
         if self == ConflictStrategy.OVERWRITE:
             return True
 
-        exists = await _state.workspace().projects.contains(id)
+        exists = await ctx.workspace.projects.contains(id)
         if not exists:
             return True
 
@@ -43,7 +43,9 @@ app = typer.Typer(name="project", help="Tools for managing projects in your work
 
 @app.command()
 @asyncio_run
+@contextual
 async def summarize(
+    ctx: Context,
     names: Annotated[
         list[str] | None,
         typer.Argument(help="Names of GitHub repositories to summarize."),
@@ -62,30 +64,32 @@ async def summarize(
     """Generate a summary for one or more GitHub projects."""
 
     async def summarize_repo(repo: Repo) -> None:
-        if not await conflict_strategy._can_write(repo.full_name):
+        if not await conflict_strategy._can_write(ctx, repo.full_name):
             return
 
-        summary, last_major_activity, tags = await asyncio.gather(
+        summary, last_major_activity, tags, languages = await asyncio.gather(
             ai.summarize_project(repo),
             ai.find_last_major_activity(repo),
             repo.tags.all(),
+            repo.get_languages(),
         )
 
-        await _state.workspace().projects.set(
+        await ctx.workspace.projects.set(
             Project(
                 id=repo.full_name,
                 summary=summary,
                 tags=await ai.generate_tags(tags, summary),
                 last_major_activity=last_major_activity.date,
                 stars=repo.stars,
+                languages=languages,
             )
         )
 
-    user = await _state.github().get_user()
+    user = await ctx.github.get_user()
     if names:
         full_names = [name if "/" in name else f"{user.login}/{name}" for name in names]
         repos = await asyncio.gather(
-            *(_state.github().repos.get(name) for name in full_names)
+            *(ctx.github.repos.get(name) for name in full_names)
         )
     else:
         all_repos = user.repos
@@ -102,7 +106,9 @@ async def summarize(
 
 @app.command()
 @asyncio_run
+@contextual
 async def delete(
+    ctx: Context,
     ids: Annotated[
         list[str] | None,
         typer.Argument(help="ID of the project to delete."),
@@ -110,10 +116,8 @@ async def delete(
 ) -> None:
     """Delete projects from the workspace."""
 
-    workspace = _state.workspace()
-
     if ids is None:
-        all_ids = workspace.projects.get_ids()
+        all_ids = ctx.workspace.projects.get_ids()
         if not all_ids:
             raise RuntimeError("No projects found in the workspace")
 
@@ -123,4 +127,4 @@ async def delete(
         ).ask_async()
         ids = selected_ids
 
-    await asyncio.gather(*(workspace.projects.delete(id) for id in ids))
+    await asyncio.gather(*(ctx.workspace.projects.delete(id) for id in ids))

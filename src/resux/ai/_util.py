@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 from functools import cached_property
-from typing import override
+from typing import Literal, override
 
 from pydantic import SecretStr
 from pydantic_ai.messages import ModelMessage
@@ -22,7 +22,10 @@ base_model_settings = ModelSettings(
 class LazyModel(Model):
     _provider: OpenRouterProvider | None = None
 
-    def __init__(self, name: str):
+    def __init__(
+        self,
+        name: Literal["x-ai/grok-3-mini-beta", "google/gemini-2.0-flash-001"] | str,
+    ):
         self.name = name
 
     @classmethod
@@ -71,6 +74,10 @@ class LazyModel(Model):
     @override
     def system(self) -> str:
         return self.wrapped.system
+
+
+gemini_2_0_flash = LazyModel("google/gemini-2.0-flash-001")
+grok_3_mini = LazyModel("x-ai/grok-3-mini-beta")
 
 
 class ProviderUninitializedError(Exception):

@@ -1,11 +1,11 @@
 from pydantic_ai import Agent, ModelRetry, RunContext
 
-from resux.ai._util import base_model_settings, LazyModel
+from resux.ai._util import base_model_settings, grok_3_mini
 from resux.git import File, Repo
 
 
 agent = Agent(
-    LazyModel("x-ai/grok-3-mini-beta"),
+    grok_3_mini,
     deps_type=list[File],
     output_type=str,
     model_settings=base_model_settings,

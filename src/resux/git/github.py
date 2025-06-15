@@ -6,7 +6,6 @@ from datetime import datetime
 from functools import cached_property
 from typing import (
     AsyncIterator,
-    Awaitable,
     Callable,
     Generic,
     Self,
@@ -48,7 +47,7 @@ class _PaginationAdapter(Pagination[_TModel], Generic[_TRaw, _TModel]):
         *,
         init: Callable[[], RawPagination[_TRaw]],
         model_type: type[_TModel],
-        get_by_key: Callable[[str], Awaitable[_TModel]] | None = None,
+        get_by_key: Callable[[str], _TRaw] | None = None,
     ) -> None:
         self.init = init
         self.model_type = model_type
@@ -74,7 +73,7 @@ class _PaginationAdapter(Pagination[_TModel], Generic[_TRaw, _TModel]):
             case int():
                 raw = await asyncio.to_thread(self._list.__getitem__, key)
             case str() if self.get_by_key:
-                raw = await self.get_by_key(key)
+                raw = await asyncio.to_thread(self.get_by_key, key)
             case _:
                 raise TypeError("Indexing by str is not supported for this model")
 
@@ -92,8 +91,8 @@ class _PaginationAdapter(Pagination[_TModel], Generic[_TRaw, _TModel]):
 
 
 class Repo(git.Repo, _Model[RawRepository]):
-    def __init__(self, raw: RawRepository) -> None:
-        self.raw = raw
+    def __init__(self, wrapped: RawRepository) -> None:
+        self.wrapped = wrapped
 
     @classmethod
     @override
@@ -103,27 +102,27 @@ class Repo(git.Repo, _Model[RawRepository]):
     @property
     @override
     def owner(self) -> User:
-        return User(self.raw.owner)
+        return User(self.wrapped.owner)
 
     @property
     @override
     def name(self) -> str:
-        return self.raw.name
+        return self.wrapped.name
 
     @property
     @override
     def full_name(self) -> str:
-        return self.raw.full_name
+        return self.wrapped.full_name
 
     @property
     @override
     def description(self) -> str | None:
-        return self.raw.description
+        return self.wrapped.description
 
     @override
     async def get_readme(self) -> File | None:
         try:
-            file = await asyncio.to_thread(self.raw.get_readme)
+            file = await asyncio.to_thread(self.wrapped.get_readme)
             return File(file)
         except UnknownObjectException as e:
             if e.status == 404:
@@ -134,7 +133,7 @@ class Repo(git.Repo, _Model[RawRepository]):
     async def get_files(self) -> AsyncIterator[File]:
         paths = [""]
         while paths:
-            files = await asyncio.to_thread(self.raw.get_dir_contents, paths.pop())
+            files = await asyncio.to_thread(self.wrapped.get_dir_contents, paths.pop())
             paths.extend((file.path for file in files if file.type == "dir"))
             for file in filter(lambda file: file.type == "file", files):
                 yield File(file)
@@ -142,16 +141,12 @@ class Repo(git.Repo, _Model[RawRepository]):
     @property
     @override
     def commits(self) -> Pagination[git.Commit]:
-        async def _get_commit(sha: str) -> Commit:
-            raw = await asyncio.to_thread(self.raw.get_commit, sha)
-            return Commit(raw)
-
         return cast(
             Pagination[git.Commit],
             _PaginationAdapter(
-                init=self.raw.get_commits,
+                init=self.wrapped.get_commits,
                 model_type=Commit,
-                get_by_key=_get_commit,
+                get_by_key=self.wrapped.get_commit,
             ),
         )
 
@@ -161,7 +156,7 @@ class Repo(git.Repo, _Model[RawRepository]):
         return cast(
             Pagination[git.Tag],
             _PaginationAdapter(
-                init=self.raw.get_tags,
+                init=self.wrapped.get_tags,
                 model_type=Tag,
             ),
         )
@@ -169,12 +164,16 @@ class Repo(git.Repo, _Model[RawRepository]):
     @property
     @override
     def stars(self) -> int:
-        return self.raw.stargazers_count
+        return self.wrapped.stargazers_count
+
+    @override
+    async def get_languages(self):
+        return await asyncio.to_thread(self.wrapped.get_languages)
 
 
 class User(git.User, _Model[RawAuthUser | RawNamedUser]):
-    def __init__(self, raw: RawNamedUser | RawAuthUser) -> None:
-        self.raw = raw
+    def __init__(self, wrapped: RawNamedUser | RawAuthUser) -> None:
+        self.wrapped = wrapped
 
     @classmethod
     @override
@@ -183,28 +182,24 @@ class User(git.User, _Model[RawAuthUser | RawNamedUser]):
 
     @property
     def email(self) -> str | None:
-        return self.raw.email
+        return self.wrapped.email
 
     @property
     def login(self) -> str:
-        return self.raw.login
+        return self.wrapped.login
 
     @property
     def name(self) -> str | None:
-        return self.raw.name
+        return self.wrapped.name
 
     @property
     def repos(self) -> Pagination[git.Repo]:
-        async def _get_repo(key: str) -> Repo:
-            raw = await asyncio.to_thread(self.raw.get_repo, key)
-            return Repo(raw)
-
         return cast(
             Pagination[git.Repo],
             _PaginationAdapter(
-                init=self.raw.get_repos,
+                init=self.wrapped.get_repos,
                 model_type=Repo,
-                get_by_key=_get_repo,
+                get_by_key=self.wrapped.get_repo,
             ),
         )
 
@@ -223,8 +218,8 @@ class File(git.File):
 
 
 class Commit(git.Commit, _Model[RawCommit]):
-    def __init__(self, raw: RawCommit) -> None:
-        self.raw = raw
+    def __init__(self, wrapped: RawCommit) -> None:
+        self.wrapped = wrapped
 
     @classmethod
     @override
@@ -233,19 +228,19 @@ class Commit(git.Commit, _Model[RawCommit]):
 
     @property
     def sha(self) -> str:
-        return self.raw.sha
+        return self.wrapped.sha
 
     @property
     def message(self) -> str:
-        return self.raw.commit.message
+        return self.wrapped.commit.message
 
     @property
     def author(self) -> git.CommitAuthor:
-        return self.raw.commit.author
+        return self.wrapped.commit.author
 
     @property
     def author_date(self) -> datetime:
-        return self.raw.commit.author.date
+        return self.wrapped.commit.author.date
 
 
 class Tag(git.Tag, _Model[RawTag]):
@@ -275,15 +270,11 @@ class Client(git.Hub):
     @property
     @override
     def repos(self) -> Pagination[git.Repo]:
-        async def _get_repo(key: str) -> Repo:
-            raw = await asyncio.to_thread(self._github.get_repo, key)
-            return Repo(raw)
-
         return cast(
             Pagination[git.Repo],
             _PaginationAdapter(
                 init=self._github.get_repos,
                 model_type=Repo,
-                get_by_key=_get_repo,
+                get_by_key=self._github.get_repo,
             ),
         )

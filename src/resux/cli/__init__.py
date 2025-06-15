@@ -3,14 +3,15 @@ from typing import Annotated
 
 import typer
 
-from resux.cli import _state, profile, project
+from resux.cli import _ctx, profile, project, skill
 from resux.util import asyncio_run, form
 from resux.ws import Environment, User, Workspace
 
 
-app = typer.Typer(callback=_state.callback)
+app = typer.Typer(callback=_ctx.callback)
 app.add_typer(project.app)
 app.add_typer(profile.app)
+app.add_typer(skill.app)
 
 
 @app.command()

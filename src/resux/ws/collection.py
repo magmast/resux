@@ -71,7 +71,11 @@ class ResourceCollection(Generic[TRes]):
         self._all_cached = True
 
     def _get_id(self, path: Path | str) -> str:
-        return str(Path(path).absolute().relative_to(self.path).with_suffix(""))
+        path = Path(path)
+        if path.is_absolute():
+            path = path.relative_to(self.path)
+
+        return str(path.with_suffix(""))
 
     async def contains(self, id: str) -> bool:
         try:

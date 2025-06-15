@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 import questionary
 import typer
 
-from resux.cli import _state
+from resux.cli._ctx import Context, contextual
 from resux.util import asyncio_run
 from resux.ws import Profile
 
@@ -80,38 +80,41 @@ app = typer.Typer(name="profile", help="Manage resume profiles.")
 
 @app.command(name="list")
 @asyncio_run
-async def list_() -> None:
+@contextual
+async def list_(ctx: Context) -> None:
     """List all profiles."""
 
-    workspace = _state.workspace()
-    async for profile in workspace.profiles:
+    async for profile in ctx.workspace.profiles:
         print(f"[{profile.id}] {profile.network}: {profile.username}")
 
 
 @app.command()
 @asyncio_run
-async def add(url: str) -> None:
+@contextual
+async def add(ctx: Context, url: str) -> None:
     """Add a profile to the resume directory."""
 
     profile = _scrap(url)
-    workspace = _state.workspace()
-    if await workspace.profiles.contains(profile.id):
+    if await ctx.workspace.profiles.contains(profile.id):
         if not await questionary.confirm(
             "Profile already exists. Overwrite?"
         ).ask_async():
             return
 
-    await workspace.profiles.set(profile)
+    await ctx.workspace.profiles.set(profile)
 
 
 @app.command()
 @asyncio_run
-async def delete(ids: Annotated[list[str] | None, typer.Argument()] = None) -> None:
+@contextual
+async def delete(
+    ctx: Context,
+    ids: Annotated[list[str] | None, typer.Argument()] = None,
+) -> None:
     """Delete a profile from the resume directory."""
 
-    workspace = _state.workspace()
     if ids is None:
-        all_ids = workspace.profiles.get_ids()
+        all_ids = ctx.workspace.profiles.get_ids()
         ids = cast(
             list[str],
             await questionary.checkbox(
@@ -119,4 +122,4 @@ async def delete(ids: Annotated[list[str] | None, typer.Argument()] = None) -> N
             ).ask_async(),
         )
 
-    await asyncio.gather(*(workspace.profiles.delete(id) for id in ids))
+    await asyncio.gather(*(ctx.workspace.profiles.delete(id) for id in ids))

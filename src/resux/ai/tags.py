@@ -1,11 +1,11 @@
 from pydantic_ai import Agent
 
 from resux.git import Tag
-from resux.ai._util import base_model_settings, LazyModel
+from resux.ai._util import base_model_settings, gemini_2_0_flash
 
 
 agent = Agent(
-    LazyModel("google/gemini-2.0-flash-001"),
+    gemini_2_0_flash,
     model_settings=base_model_settings,
     output_type=list[str],
     instructions="""\
